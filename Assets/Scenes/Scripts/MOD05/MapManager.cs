@@ -129,9 +129,14 @@ public class MapManager : MonoBehaviour
     private Vector3 GridToWorldPosition(float posX, float posY)
     {
         Vector3 anchorPosition = mapRoot != null ? mapRoot.position : transform.position;
+        
+        // 3D Dünyada: X sağ-sol, Z ileri-geri, Y ise yüksekliktir (Yerçekimi yönü)
         float worldX = anchorPosition.x + mapOrigin.x + (posX * unitsPerGridCell);
-        float worldY = anchorPosition.y + mapOrigin.y + (posY * unitsPerGridCell);
-        float worldZ = anchorPosition.z + MapManagerConstants.MAP_PIN_HEIGHT;
+        float worldZ = anchorPosition.z + mapOrigin.y + (posY * unitsPerGridCell);
+        
+        // Sabit olan Pin Yüksekliği (Havaya kalkmaması için) Y eksenine verilmeli
+        float worldY = anchorPosition.y + MapManagerConstants.MAP_PIN_HEIGHT;
+        
         return new Vector3(worldX, worldY, worldZ);
     }
 

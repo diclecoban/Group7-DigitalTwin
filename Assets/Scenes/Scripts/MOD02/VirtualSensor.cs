@@ -48,19 +48,20 @@ public class VirtualSensor : MonoBehaviour
         // 2. KURBAN (VICTIM) ALGILAMA SİMÜLASYONU (YOLO Yapay Zeka Kamerası)
         // Robotun etrafındaki visionRadius (örn 5m) içindeki tüm objeleri tarar.
         Collider[] colliders = Physics.OverlapSphere(transform.position, visionRadius);
-        bool victimInSight = false;
+        int victimCount = 0;
+        VictimStatus lastFoundStatus = VictimStatus.NONE;
 
         foreach (var col in colliders)
         {
             if (col.CompareTag("Victim"))
             {
-                // Etiket victim ise, üstündeki VictimInfo'yu al
                 VictimInfo info = col.GetComponent<VictimInfo>();
                 if (info != null)
                 {
-                    victimInSight = true;
+                    victimCount++;
+                    lastFoundStatus = info.severity;
 
-                    // Gerçekten robot bu kurbanı görmüş gibi dashboard'u güncelleyelim:
+                    // Her bulduğu farklı kurban için MapManager'a ayrı bir pin koy komutu yollar
                     TelemetryData mockData = new TelemetryData
                     {
                         posX = col.transform.position.x, 
@@ -72,20 +73,30 @@ public class VirtualSensor : MonoBehaviour
                         acousticAngle = 0f
                     };
 
-                    // Haritaya pini yerleştir ve UI'ı güncelle
-                    if (mapManager != null) mapManager.PlacePin(mockData.posX, mockData.posY, mockData.victimStatus);
-                    if (uiManager != null) uiManager.UpdateVictimStatus(mockData.victimStatus);
+                    if (mapManager != null) 
+                    {
+                        mapManager.PlacePin(mockData.posX, mockData.posY, mockData.victimStatus);
+                    }
 
-                    Debug.Log($"[MOD-02] Vision AI: Kurban Tespiti! Durum: {info.severity}");
-                    break; // Aynı anda 1 kişi göstersin yeterli
+                    Debug.Log($"[MOD-02] Kurban Tespit Edildi! Durum: {info.severity}");
                 }
             }
         }
 
-        if (!victimInSight && uiManager != null)
+        // Eğer arayüz (UI) varsa sadece bir tane yazdırabiliriz, titremesin diye:
+        if (uiManager != null)
         {
-            // Eğer görüş açısında kurban yoksa arayüzü NONE'a çek
-            uiManager.UpdateVictimStatus(VictimStatus.NONE);
+            if (victimCount == 0)
+            {
+                uiManager.UpdateVictimStatus(VictimStatus.NONE);
+            }
+            else if (victimCount == 1)
+            {
+                // Sadece 1 kurban varsa onun durumunu direkt yaz
+                uiManager.UpdateVictimStatus(lastFoundStatus);
+            }
+            // NOT: Eğer tam o saniyede 2 kurban birden görüyorsa UI'ı güncellemiyoruz
+            // (Zaten haritaya ikisinin de pin'ini çoktan yukarıda basmış oldu!)
         }
     }
 }

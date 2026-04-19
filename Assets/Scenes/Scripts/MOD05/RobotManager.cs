@@ -19,6 +19,11 @@ public class RobotManager : MonoBehaviour
     [SerializeField] private string serverUrl = "ws://192.168.1.10:5000";
     [SerializeField] private bool connectOnStart = true;
 
+    [Header("Mocking (Demo Only)")]
+    [SerializeField] private bool useMockFileData = false;
+    [SerializeField] private string mockFileName = "mock_telemetry.json";
+    [SerializeField] private float mockUpdateInterval = 1.0f;
+
     [Header("Managers")]
     [SerializeField] private MapManager mapManager;
     [SerializeField] private UIManager uiManager;
@@ -50,7 +55,25 @@ public class RobotManager : MonoBehaviour
 
     private void Start()
     {
-        networkClient = new WebSocketClient();
+        if (useMockFileData)
+        {
+            Debug.Log("RobotManager: Using mock file data mode.");
+            networkClient = new FileNetworkClient(mockUpdateInterval);
+
+            // Check for potential interference and automatically disable it
+            MockTelemetryTester tester = FindObjectOfType<MockTelemetryTester>();
+            if (tester != null && tester.enabled)
+            {
+                Debug.LogWarning("RobotManager: Automatically disabling MockTelemetryTester to prevent interference with file-based mock data.");
+                tester.enabled = false;
+            }
+        }
+        else
+        {
+            Debug.Log("RobotManager: Using real WebSocket client mode.");
+            networkClient = new WebSocketClient();
+        }
+
         networkClient.OnTelemetryReceived += HandleTelemetryReceived;
 
         if (audioManager != null)
@@ -59,7 +82,7 @@ public class RobotManager : MonoBehaviour
             audioManager.OnAudioBlobReady += HandleAudioBlobReady;
         }
 
-        if (connectOnStart)
+        if (connectOnStart || useMockFileData)
         {
             Connect();
         }
@@ -83,10 +106,20 @@ public class RobotManager : MonoBehaviour
     {
         if (networkClient == null)
         {
+            Debug.LogError("RobotManager: networkClient is null in Connect().");
             return;
         }
 
-        networkClient.Connect(serverUrl);
+        if (useMockFileData)
+        {
+            Debug.Log($"RobotManager: Connecting to mock file '{mockFileName}'...");
+            networkClient.Connect(mockFileName);
+        }
+        else
+        {
+            Debug.Log($"RobotManager: Connecting to server URL '{serverUrl}'...");
+            networkClient.Connect(serverUrl);
+        }
     }
 
     public void Disconnect()
@@ -147,6 +180,8 @@ public class RobotManager : MonoBehaviour
 
     private void HandleTelemetryReceived(TelemetryData data)
     {
+        Debug.Log($"RobotManager: Received telemetry. Pos: ({data.posX}, {data.posY}), Status: {data.victimStatus}");
+        
         if (mapManager != null)
         {
             mapManager.UpdateRobotPosition(data.posX, data.posY);

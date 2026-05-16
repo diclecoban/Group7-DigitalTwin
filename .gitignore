@@ -1,15 +1,16 @@
-/[Library]/
-/[Temp]/
-/[Obj]/
-/[Build]/
-/[Builds]/
-/[Logs]/
-/[MemoryCaptures]/
-/[UserSettings]/
+# Unity generated folders
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/MemoryCaptures/
+/UserSettings/
 
 # Unity generated
-[AssetStoreTools]
-[AssetStoreTools].meta
+AssetStoreTools
+AssetStoreTools.meta
 
 # MSVC / Visual Studio / VS Code
 .vscode/
@@ -35,8 +36,5 @@
 .Trashes
 
 # Crashlytics / Platforms
-/[Assets]/AddressableAssetsData/*/*.bin*
-/[Assets]/StreamingAssets/aa/*
-
-# Keep meta files
-!/[Assets]/**/*.meta
+/Assets/AddressableAssetsData/*/*.bin*
+/Assets/StreamingAssets/aa/*

@@ -1557,7 +1557,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 35831ab4c0e744dfa96bc6b2251352dc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serverUrl: ws://127.0.0.1:5000
+  serverUrl: ws://localhost:5001
   connectOnStart: 0
   useMockFileData: 0
   mockFileName: mock_telemetry.json

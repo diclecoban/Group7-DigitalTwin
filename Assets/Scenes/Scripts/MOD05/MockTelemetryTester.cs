@@ -171,6 +171,7 @@ public class MockTelemetryTester : MonoBehaviour
 
         bool hasSmoke = index % 3 != 0;
         bool hasAcousticHit = index % 2 == 0;
+        bool isStuck = status == VictimStatus.TRAPPED && hasSmoke;
 
         TelemetryData data = new TelemetryData
         {
@@ -180,6 +181,7 @@ public class MockTelemetryTester : MonoBehaviour
             smokeDetected = hasSmoke,
             victimStatus = status,
             priorityLevel = ResolvePriorityLevel(status),
+            isStuck = isStuck,
             acousticHit = hasAcousticHit,
             acousticAngle = beamAngle + (index * 15f)
         };

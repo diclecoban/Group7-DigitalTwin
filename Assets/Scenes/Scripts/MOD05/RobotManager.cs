@@ -51,6 +51,11 @@ public class RobotManager : MonoBehaviour
         {
             acousticBeamManager = FindObjectOfType<MapManager_AcousticBeam>();
         }
+
+        if (audioManager == null)
+        {
+            audioManager = new AudioManager();
+        }
     }
 
     private void Start()
@@ -78,8 +83,8 @@ public class RobotManager : MonoBehaviour
 
         if (audioManager != null)
         {
-            audioManager.SetNetworkClient(networkClient);
             audioManager.OnAudioBlobReady += HandleAudioBlobReady;
+            audioManager.OnCaptureStateChanged += HandleAudioCaptureStateChanged;
         }
 
         if (connectOnStart || useMockFileData)
@@ -93,6 +98,7 @@ public class RobotManager : MonoBehaviour
         if (audioManager != null)
         {
             audioManager.OnAudioBlobReady -= HandleAudioBlobReady;
+            audioManager.OnCaptureStateChanged -= HandleAudioCaptureStateChanged;
         }
 
         if (networkClient != null)
@@ -167,14 +173,15 @@ public class RobotManager : MonoBehaviour
         if (audioManager != null)
         {
             audioManager.OnAudioBlobReady -= HandleAudioBlobReady;
+            audioManager.OnCaptureStateChanged -= HandleAudioCaptureStateChanged;
         }
 
         audioManager = manager;
 
         if (audioManager != null)
         {
-            audioManager.SetNetworkClient(networkClient);
             audioManager.OnAudioBlobReady += HandleAudioBlobReady;
+            audioManager.OnCaptureStateChanged += HandleAudioCaptureStateChanged;
         }
     }
 
@@ -223,5 +230,15 @@ public class RobotManager : MonoBehaviour
         }
 
         networkClient.SendAudioBlob(wavData);
+    }
+
+    private void HandleAudioCaptureStateChanged(AudioCaptureState state)
+    {
+        if (uiManager == null)
+        {
+            return;
+        }
+
+        uiManager.UpdatePTTState(state);
     }
 }

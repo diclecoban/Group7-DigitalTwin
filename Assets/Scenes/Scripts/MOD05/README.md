@@ -71,7 +71,7 @@ public class RobotManager : MonoBehaviour
 | Type | Fields / Members | Description |
 |---|---|---|
 | `VictimStatus` | `NONE`, `STANDING`, `LYING`, `TRAPPED` | Victim severity enum used by Unity-side visualization |
-| `TelemetryData` | `posX`, `posY`, `temperature`, `smokeDetected`, `victimStatus`, `priorityLevel` | Main telemetry packet deserialized from JSON |
+| `TelemetryData` | `posX`, `posY`, `temperature`, `smokeDetected`, `victimStatus`, `priorityLevel`, `isStuck`, `acousticHit`, `acousticAngle` | Main telemetry packet deserialized from JSON |
 
 ### `INetworkClient.cs`
 
@@ -92,7 +92,6 @@ public class RobotManager : MonoBehaviour
 | `AudioCaptureState` | enum | `Idle`, `Recording`, `Encoding`, `Sending` |
 | `event Action<byte[]> OnAudioBlobReady` | event | Fired after audio encoding completes |
 | `event Action<AudioCaptureState> OnCaptureStateChanged` | event | Fired whenever the capture state changes |
-| `SetNetworkClient(INetworkClient client)` | `void` | Injects the active network client |
 | `StartRecording()` | `void` | Starts microphone capture |
 | `StopAndEncode()` | `void` | Stops capture, encodes audio to `.wav`, and prepares it for sending |
 | `GetCaptureState()` | `AudioCaptureState` | Returns current audio pipeline state |
@@ -106,7 +105,7 @@ public class RobotManager : MonoBehaviour
 | `MapManagerConstants.PIN_PRIORITY_YELLOW` | `int` | Priority constant for lying victims |
 | `MapManagerConstants.PIN_PRIORITY_GREEN` | `int` | Priority constant for standing victims |
 | `PlacePin(float posX, float posY, VictimStatus status)` | `void` | Places a color-coded victim pin on the map |
-| `UpdateRobotPosition(float posX, float posY)` | `void` | Updates robot marker location |
+| `UpdateRobotPosition(float posX, float posY)` | `void` | Updates robot marker location on the configured map plane |
 | `ClearAllPins()` | `void` | Clears all active victim pins |
 
 ### `UIManager.cs`
@@ -190,14 +189,12 @@ Defines HUD-side visualization responsibilities such as temperature, smoke, vict
 ### Open Questions
 
 * Should `victimStatus` remain an enum in Unity, or should future dashboard payloads switch to string-based status values?
-* Should acoustic beam data be merged into `TelemetryData`, or remain in a separate visualization path for `MapManager_AcousticBeam.cs`?
+* What final `unitsPerGridCell`, `mapOrigin`, and coordinate-plane settings should be used after physical map calibration?
 
 ---
 
 ## Known Limitations
 
-* Concrete runtime implementations for the WebSocket client and microphone backend are not included in this folder yet.
-* `AudioManager.cs`, `MapManager.cs`, and `UIManager.cs` currently define interfaces / architecture-level behavior and method stubs rather than full implementations.
 * Student IDs are still incomplete in some documentation blocks.
 
 ---

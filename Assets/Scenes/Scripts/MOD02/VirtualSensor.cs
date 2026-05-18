@@ -7,6 +7,7 @@ public class VirtualSensor : MonoBehaviour
     [Header("Sensör Ayarları")]
     public float visionRadius = 5f; // Kameranın görüş/algılama mesafesi
     public float obstacleRayDistance = 3f; // Ultrasonik sensör menzili
+    [SerializeField] private Transform sensorOrigin;
 
     [Header("Bağlantılar")]
     public MapManager mapManager;
@@ -34,10 +35,12 @@ public class VirtualSensor : MonoBehaviour
 
     private void ScanEnvironment()
     {
+        Transform origin = sensorOrigin != null ? sensorOrigin : transform;
+
         // 1. ENGEL (OBSTACLE) ALGILAMA SİMÜLASYONU (İleriye dönük lazer atışı)
         // Eğer lazer "Obstacle" etiketli bir şeye değerse konsola uyarı yazar.
         RaycastHit hit;
-        if (Physics.Raycast(transform.position, transform.forward, out hit, obstacleRayDistance))
+        if (Physics.Raycast(origin.position, origin.forward, out hit, obstacleRayDistance))
         {
             if (hit.collider.CompareTag("Obstacle"))
             {
@@ -47,7 +50,7 @@ public class VirtualSensor : MonoBehaviour
 
         // 2. KURBAN (VICTIM) ALGILAMA SİMÜLASYONU (YOLO Yapay Zeka Kamerası)
         // Robotun etrafındaki visionRadius (örn 5m) içindeki tüm objeleri tarar.
-        Collider[] colliders = Physics.OverlapSphere(transform.position, visionRadius);
+        Collider[] colliders = Physics.OverlapSphere(origin.position, visionRadius);
         int victimCount = 0;
         VictimStatus lastFoundStatus = VictimStatus.NONE;
 
@@ -69,6 +72,8 @@ public class VirtualSensor : MonoBehaviour
                         temperature = 28.5f,
                         smokeDetected = false,
                         victimStatus = info.severity,
+                        priorityLevel = ResolvePriorityLevel(info.severity),
+                        isStuck = false,
                         acousticHit = false,
                         acousticAngle = 0f
                     };
@@ -97,6 +102,21 @@ public class VirtualSensor : MonoBehaviour
             }
             // NOT: Eğer tam o saniyede 2 kurban birden görüyorsa UI'ı güncellemiyoruz
             // (Zaten haritaya ikisinin de pin'ini çoktan yukarıda basmış oldu!)
+        }
+    }
+
+    private static int ResolvePriorityLevel(VictimStatus status)
+    {
+        switch (status)
+        {
+            case VictimStatus.TRAPPED:
+                return MapManagerConstants.PIN_PRIORITY_RED;
+            case VictimStatus.LYING:
+                return MapManagerConstants.PIN_PRIORITY_YELLOW;
+            case VictimStatus.STANDING:
+                return MapManagerConstants.PIN_PRIORITY_GREEN;
+            default:
+                return 0;
         }
     }
 }

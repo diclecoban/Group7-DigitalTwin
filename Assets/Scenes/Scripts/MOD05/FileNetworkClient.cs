@@ -1,147 +1,298 @@
+/// <summary>
+/// File:    FileNetworkClient.cs
+/// Brief:   Lightweight mock INetworkClient that replays telemetry from a JSON file.
+/// </summary>
+
 using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-/// <summary>
-/// Wrapper for JSON array parsing since JsonUtility doesn't support top-level arrays.
-/// </summary>
-[Serializable]
-public class TelemetryDataArray
-{
-    public TelemetryData[] packets;
-}
-
-/// <summary>
-/// A mock network client that reads telemetry data from a local JSON file.
-/// Useful for demo purposes when the backend is not available.
-/// </summary>
 public class FileNetworkClient : INetworkClient
 {
-    public event Action<TelemetryData> OnTelemetryReceived;
+    private readonly float updateIntervalSeconds;
+    private readonly SynchronizationContext mainThreadContext;
+    private readonly ManualResetEventSlim playGate = new ManualResetEventSlim(true);
 
-    private SynchronizationContext mainThreadContext;
-    private CancellationTokenSource cts;
-    private bool isStreaming;
-    private float updateInterval = 1.0f;
+    private CancellationTokenSource cancellationTokenSource;
+    private TelemetryReplayFrame[] replayFrames;
 
-    public FileNetworkClient(float updateInterval = 1.0f)
+    public event Action<string> OnTelemetryJsonReceived;
+    public event Action<byte[]> OnVideoFrameReceived;
+    public event Action<NetworkConnectionState> OnConnectionStateChanged;
+    public event Action<float> OnLatencyUpdated;
+    public bool IsConnected => cancellationTokenSource != null && !cancellationTokenSource.IsCancellationRequested;
+
+    public FileNetworkClient(float updateIntervalSeconds)
     {
-        this.updateInterval = updateInterval;
-        mainThreadContext = SynchronizationContext.Current;
-        
-        if (mainThreadContext == null)
-        {
-            Debug.LogWarning("FileNetworkClient: SynchronizationContext.Current is null. Events might not fire on the main thread.");
-        }
+        this.updateIntervalSeconds = Mathf.Max(0.1f, updateIntervalSeconds);
+        mainThreadContext = SynchronizationContext.Current ?? new SynchronizationContext();
     }
 
-    public void Connect(string filePath)
+    public async void Connect(string fileName)
     {
-        if (isStreaming) return;
+        Disconnect();
 
-        // In this implementation, ipAddress is treated as the file path or filename in StreamingAssets
-        string absolutePath = filePath;
-        if (!File.Exists(absolutePath))
+        cancellationTokenSource = new CancellationTokenSource();
+        string filePath = ResolveFilePath(fileName);
+        PublishConnectionState(NetworkConnectionState.Connecting);
+
+        if (!File.Exists(filePath))
         {
-            absolutePath = Path.Combine(Application.streamingAssetsPath, filePath);
+            Debug.LogWarning($"FileNetworkClient: Mock telemetry file not found at '{filePath}'.");
+            PublishConnectionState(NetworkConnectionState.Disconnected);
+            return;
         }
 
-        if (File.Exists(absolutePath))
-        {
-            Debug.Log($"FileNetworkClient: Loading mock data from {absolutePath}");
-            try
-            {
-                string jsonText = File.ReadAllText(absolutePath);
-                Debug.Log($"FileNetworkClient: Read {jsonText.Length} characters from file.");
-                
-                TelemetryDataArray dataArray = JsonUtility.FromJson<TelemetryDataArray>(jsonText);
-
-                if (dataArray != null && dataArray.packets != null && dataArray.packets.Length > 0)
-                {
-                    Debug.Log($"FileNetworkClient: Successfully parsed {dataArray.packets.Length} packets. Starting stream...");
-                    StartStreaming(dataArray.packets);
-                }
-                else
-                {
-                    string errorMsg = "FileNetworkClient: JSON file is empty, invalid format, or mismatch. Expected { \"packets\": [...] }";
-                    if (dataArray != null && dataArray.packets == null) errorMsg += " (packets array was null)";
-                    Debug.LogError(errorMsg);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"FileNetworkClient: Failed to read/parse mock file: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
-        else
-        {
-            Debug.LogError($"FileNetworkClient: Mock file NOT found at {absolutePath}. Please check your StreamingAssets folder.");
-        }
+        PublishConnectionState(NetworkConnectionState.Connected);
+        mainThreadContext.Post(_ => OnLatencyUpdated?.Invoke(0f), null);
+        await ReplayFileAsync(filePath, cancellationTokenSource.Token);
     }
 
     public void Disconnect()
     {
-        StopStreaming();
+        if (cancellationTokenSource == null)
+        {
+            return;
+        }
+
+        cancellationTokenSource.Cancel();
+        cancellationTokenSource.Dispose();
+        cancellationTokenSource = null;
+        PublishConnectionState(NetworkConnectionState.Disconnected);
+    }
+
+    public void Play()
+    {
+        playGate.Set();
+    }
+
+    public void Pause()
+    {
+        playGate.Reset();
+    }
+
+    public void Stop()
+    {
+        Disconnect();
     }
 
     public void SendOperatorCommand(string command)
     {
-        Debug.Log($"FileNetworkClient (Mock): Sending command: {command}");
+        Debug.Log($"FileNetworkClient: Mock command sent: {command}");
     }
 
     public void SendAudioBlob(byte[] wavData)
     {
-        Debug.Log($"FileNetworkClient (Mock): Sending audio blob ({wavData.Length} bytes)");
+        int byteCount = wavData != null ? wavData.Length : 0;
+        Debug.Log($"FileNetworkClient: Mock audio blob sent: {byteCount} bytes");
     }
 
-    private void StartStreaming(TelemetryData[] packets)
+    private async Task ReplayFileAsync(string filePath, CancellationToken cancellationToken)
     {
-        cts = new CancellationTokenSource();
-        isStreaming = true;
-        Task.Run(() => StreamingLoop(packets, cts.Token));
-    }
-
-    private void StopStreaming()
-    {
-        isStreaming = false;
-        if (cts != null)
+        try
         {
-            cts.Cancel();
-            cts.Dispose();
-            cts = null;
+            string fileJson = File.ReadAllText(filePath);
+            replayFrames = ParseReplayFrames(fileJson);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"FileNetworkClient: Failed to read mock telemetry: {ex.Message}");
+            return;
+        }
+
+        if (replayFrames == null || replayFrames.Length == 0)
+        {
+            return;
+        }
+
+        int frameIndex = 0;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            for (; frameIndex < replayFrames.Length; frameIndex++)
+            {
+                try
+                {
+                    playGate.Wait(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                TelemetryReplayFrame frame = replayFrames[frameIndex];
+                mainThreadContext.Post(_ => OnTelemetryJsonReceived?.Invoke(frame.json), null);
+
+                int delayMs = ResolveDelayMs(frameIndex);
+                try
+                {
+                    await Task.Delay(delayMs, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+
+            frameIndex = 0;
         }
     }
 
-    private async Task StreamingLoop(TelemetryData[] packets, CancellationToken token)
+    private int ResolveDelayMs(int frameIndex)
     {
-        int index = 0;
-        while (!token.IsCancellationRequested)
+        if (replayFrames == null || frameIndex >= replayFrames.Length - 1)
         {
-            TelemetryData currentData = packets[index];
-            
-            // Post to main thread
-            if (mainThreadContext != null)
+            return Mathf.RoundToInt(updateIntervalSeconds * 1000f);
+        }
+
+        int delta = replayFrames[frameIndex + 1].timestampMs - replayFrames[frameIndex].timestampMs;
+        return Mathf.Clamp(delta, 1, 60000);
+    }
+
+    private static TelemetryReplayFrame[] ParseReplayFrames(string json)
+    {
+        string trimmed = json.Trim();
+        if (!trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            return new[] { new TelemetryReplayFrame { timestampMs = 0, json = trimmed } };
+        }
+
+        string[] objectJsons = SplitTopLevelObjects(trimmed);
+        TelemetryReplayFrame[] frames = new TelemetryReplayFrame[objectJsons.Length];
+        for (int i = 0; i < objectJsons.Length; i++)
+        {
+            frames[i] = new TelemetryReplayFrame
             {
-                mainThreadContext.Post(_ => OnTelemetryReceived?.Invoke(currentData), null);
-            }
-            else
+                timestampMs = ExtractJsonInt(objectJsons[i], "timestamp_ms"),
+                json = objectJsons[i]
+            };
+        }
+
+        return frames;
+    }
+
+    private static string[] SplitTopLevelObjects(string arrayJson)
+    {
+        System.Collections.Generic.List<string> objects = new System.Collections.Generic.List<string>();
+        int depth = 0;
+        int start = -1;
+        bool inString = false;
+        bool escaped = false;
+
+        for (int i = 0; i < arrayJson.Length; i++)
+        {
+            char c = arrayJson[i];
+            if (escaped)
             {
-                // Fallback for cases where context wasn't captured
-                OnTelemetryReceived?.Invoke(currentData);
+                escaped = false;
+                continue;
             }
 
-            index = (index + 1) % packets.Length;
-
-            try
+            if (c == '\\')
             {
-                await Task.Delay((int)(updateInterval * 1000), token);
+                escaped = true;
+                continue;
             }
-            catch (OperationCanceledException)
+
+            if (c == '"')
             {
-                break;
+                inString = !inString;
+                continue;
+            }
+
+            if (inString)
+            {
+                continue;
+            }
+
+            if (c == '{')
+            {
+                if (depth == 0)
+                {
+                    start = i;
+                }
+
+                depth++;
+            }
+            else if (c == '}')
+            {
+                depth--;
+                if (depth == 0 && start >= 0)
+                {
+                    objects.Add(arrayJson.Substring(start, i - start + 1));
+                    start = -1;
+                }
             }
         }
+
+        return objects.ToArray();
+    }
+
+    private static int ExtractJsonInt(string json, string key)
+    {
+        string quotedKey = "\"" + key + "\"";
+        int keyIndex = json.IndexOf(quotedKey, StringComparison.Ordinal);
+        if (keyIndex < 0)
+        {
+            return 0;
+        }
+
+        int colonIndex = json.IndexOf(':', keyIndex + quotedKey.Length);
+        if (colonIndex < 0)
+        {
+            return 0;
+        }
+
+        int endIndex = colonIndex + 1;
+        while (endIndex < json.Length && (char.IsWhiteSpace(json[endIndex]) || json[endIndex] == '-'))
+        {
+            endIndex++;
+        }
+
+        int startIndex = colonIndex + 1;
+        while (startIndex < json.Length && char.IsWhiteSpace(json[startIndex]))
+        {
+            startIndex++;
+        }
+
+        while (endIndex < json.Length && char.IsDigit(json[endIndex]))
+        {
+            endIndex++;
+        }
+
+        if (int.TryParse(json.Substring(startIndex, endIndex - startIndex), out int parsed))
+        {
+            return parsed;
+        }
+
+        return 0;
+    }
+
+    private void PublishConnectionState(NetworkConnectionState state)
+    {
+        mainThreadContext.Post(_ => OnConnectionStateChanged?.Invoke(state), null);
+    }
+
+    private static string ResolveFilePath(string fileName)
+    {
+        if (Path.IsPathRooted(fileName))
+        {
+            return fileName;
+        }
+
+        string streamingAssetsPath = Path.Combine(Application.streamingAssetsPath, fileName);
+        if (File.Exists(streamingAssetsPath))
+        {
+            return streamingAssetsPath;
+        }
+
+        return Path.Combine(Application.dataPath, fileName);
+    }
+
+    private struct TelemetryReplayFrame
+    {
+        public int timestampMs;
+        public string json;
     }
 }

@@ -14,6 +14,7 @@ using UnityEngine;
 public static class AudioManagerConstants {
     public const int AUDIO_SAMPLE_RATE_HZ = 16000; 
     public const int AUDIO_MAX_RECORD_SECS = 10;   
+    public const int AUDIO_CHANNELS = 1;
 }
 
 public enum AudioCaptureState { Idle=0, Recording=1, Encoding=2, Sending=3 }
@@ -27,6 +28,11 @@ public class AudioManager
     private AudioCaptureState currentState = AudioCaptureState.Idle;
     private AudioClip recordingClip;
     private string microphoneDevice;
+    private readonly float[] amplitudeSampleBuffer = new float[256];
+
+    public void SetNetworkClient(INetworkClient client) { 
+        // Kept for RobotManager dependency injection; RobotManager performs the actual send after OnAudioBlobReady.
+    }
 
     public void StartRecording() { 
         if (currentState != AudioCaptureState.Idle)
@@ -95,6 +101,32 @@ public class AudioManager
         return currentState;
     }
 
+    public float PollAmplitudeLevel()
+    {
+        if (currentState != AudioCaptureState.Recording || recordingClip == null)
+        {
+            return 0f;
+        }
+
+        int microphonePosition = Microphone.GetPosition(microphoneDevice);
+        if (microphonePosition <= 0)
+        {
+            return 0f;
+        }
+
+        int sampleStart = Mathf.Max(0, microphonePosition - amplitudeSampleBuffer.Length);
+        recordingClip.GetData(amplitudeSampleBuffer, sampleStart);
+
+        float sumSquares = 0f;
+        for (int i = 0; i < amplitudeSampleBuffer.Length; i++)
+        {
+            float sample = amplitudeSampleBuffer[i];
+            sumSquares += sample * sample;
+        }
+
+        return Mathf.Clamp01(Mathf.Sqrt(sumSquares / amplitudeSampleBuffer.Length));
+    }
+
     /* -- Private Internal Logic (Visible for Architecture) -- */
 
     /// <summary>
@@ -107,8 +139,8 @@ public class AudioManager
     }
 
     /// <summary>
-    /// Encodes raw PCM float samples into a standard 16-bit PCM .wav byte array.
-    /// WAV format: RIFF header (44 bytes) + raw PCM data.
+    /// Encodes raw PCM float samples into MOD-04 compatible 16-bit PCM mono WAV.
+    /// WAV format: RIFF header (44 bytes) + 16 kHz mono signed PCM data.
     /// </summary>
     /// <param name="samples">Float sample array from AudioClip.GetData</param>
     /// <param name="channels">Number of audio channels (1 = mono)</param>
@@ -117,9 +149,12 @@ public class AudioManager
     private byte[] EncodeToWav(float[] samples, int channels, int sampleRate)
     {
         int bitsPerSample = 16;
-        int byteRate = sampleRate * channels * (bitsPerSample / 8);
-        int blockAlign = channels * (bitsPerSample / 8);
-        int dataSize = samples.Length * (bitsPerSample / 8);
+        int outputSampleCount = channels <= 1 ? samples.Length : samples.Length / channels;
+        int outputChannels = AudioManagerConstants.AUDIO_CHANNELS;
+        int outputSampleRate = AudioManagerConstants.AUDIO_SAMPLE_RATE_HZ;
+        int byteRate = outputSampleRate * outputChannels * (bitsPerSample / 8);
+        int blockAlign = outputChannels * (bitsPerSample / 8);
+        int dataSize = outputSampleCount * (bitsPerSample / 8);
 
         using (MemoryStream stream = new MemoryStream(44 + dataSize))
         using (BinaryWriter writer = new BinaryWriter(stream))
@@ -133,8 +168,8 @@ public class AudioManager
             writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
             writer.Write(16);                                // Subchunk1Size (PCM)
             writer.Write((short)1);                          // AudioFormat (1 = PCM)
-            writer.Write((short)channels);                   // NumChannels
-            writer.Write(sampleRate);                        // SampleRate
+            writer.Write((short)outputChannels);             // NumChannels
+            writer.Write(outputSampleRate);                  // SampleRate
             writer.Write(byteRate);                          // ByteRate
             writer.Write((short)blockAlign);                 // BlockAlign
             writer.Write((short)bitsPerSample);              // BitsPerSample
@@ -143,10 +178,26 @@ public class AudioManager
             writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
             writer.Write(dataSize);                          // Subchunk2Size
 
-            // Convert float samples [-1.0, 1.0] to 16-bit signed integers
-            for (int i = 0; i < samples.Length; i++)
+            // Convert float samples [-1.0, 1.0] to mono 16-bit signed integers.
+            for (int i = 0; i < outputSampleCount; i++)
             {
-                float clamped = Mathf.Clamp(samples[i], -1f, 1f);
+                float sample = 0f;
+                if (channels <= 1)
+                {
+                    sample = samples[i];
+                }
+                else
+                {
+                    int baseIndex = i * channels;
+                    for (int channel = 0; channel < channels; channel++)
+                    {
+                        sample += samples[baseIndex + channel];
+                    }
+
+                    sample /= channels;
+                }
+
+                float clamped = Mathf.Clamp(sample, -1f, 1f);
                 short pcm16 = (short)(clamped * short.MaxValue);
                 writer.Write(pcm16);
             }
@@ -155,4 +206,14 @@ public class AudioManager
         }
     }
 
+    /// <summary>
+    /// Overload kept for backward compatibility with the original signature.
+    /// Internal helper to encode raw microphone data to PCM .wav format.
+    /// This demonstrates the internal audio pipeline separation.
+    /// </summary>
+    private byte[] EncodeToWav(object clip) { 
+        // Legacy stub — real encoding uses the typed overload above.
+        Debug.LogWarning("AudioManager: EncodeToWav(object) called — use the typed overload instead.");
+        return new byte[0];
+    }
 }

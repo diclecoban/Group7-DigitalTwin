@@ -71,10 +71,12 @@
     <Compile Include="Assets/Scenes/Scripts/MOD05/UIManager.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/VertexShakeB.cs" />
     <Compile Include="Assets/Scenes/Scripts/MOD05/AudioManager.cs" />
+    <Compile Include="Assets/Scenes/Scripts/MOD05/IndustrialTelemetryPanel.cs" />
     <Compile Include="Assets/Scenes/Scripts/MOD05/RobotManager.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/DropdownSample.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/VertexColorCycler.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/EnvMapAnimator.cs" />
+    <Compile Include="Assets/Scenes/Scripts/MOD05/RobotVisualAnimator.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/TMP_TextSelector_A.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/Benchmark01_UGUI.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/SimpleScript.cs" />
@@ -94,6 +96,7 @@
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/TMP_TextEventCheck.cs" />
     <Compile Include="Assets/Scenes/Scripts/MOD05/OperatorCameraController.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/TMP_UiFrameRateCounter.cs" />
+    <Compile Include="Assets/Scenes/Scripts/MOD05/IndustrialOperatorControls.cs" />
     <Compile Include="Assets/Scenes/Scripts/MOD05/AcousticBeamVisualizer.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/Benchmark01.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/TextMeshSpawner.cs" />
@@ -109,6 +112,7 @@
     <Compile Include="Assets/Scenes/Scripts/MOD05/AudioManagerTester.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/ShaderPropAnimator.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/CameraController.cs" />
+    <Compile Include="Assets/Scenes/Scripts/MOD05/IndustrialPerceptionPanel.cs" />
     <Compile Include="Assets/Scenes/Scripts/MOD05/FileNetworkClient.cs" />
     <Compile Include="Assets/TextMesh Pro/Examples &amp; Extras/Scripts/Benchmark03.cs" />
     <Compile Include="Assets/Scenes/Scripts/MOD05/INetworkClient.cs" />

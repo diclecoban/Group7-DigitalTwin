@@ -367,6 +367,7 @@
 "Assets/Scenes/Scripts/MOD05/MapManager_AcousticBeam.cs"
 "Assets/Scenes/Scripts/MOD05/MockTelemetryTester.cs"
 "Assets/Scenes/Scripts/MOD05/OperatorCameraController.cs"
+"Assets/Scenes/Scripts/MOD05/OperatorControlUI.cs"
 "Assets/Scenes/Scripts/MOD05/RobotManager.cs"
 "Assets/Scenes/Scripts/MOD05/UIManager.cs"
 "Assets/Scenes/Scripts/MOD05/WebSocketClient.cs"
